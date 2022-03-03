@@ -1,11 +1,20 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect
 from data import db_session
 from data.users import User
 from data.jobs import Jobs
 from data.forms import RegisterForm
+from flask_login import LoginManager
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'yandexlyceum_secret_key'
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+
+@login_manager.user_loader
+def load_user(id):
+    db_sess = db_session.create_session()
+    return db_sess.query(User).get(id)
 
 
 @app.route("/")
@@ -16,10 +25,28 @@ def index():
 
 
 @app.route('/register', methods=['GET', 'POST'])
-def login():
+def reqister():
     form = RegisterForm()
     if form.validate_on_submit():
-        return render_template('success.html', title='Успешно', data=form.login)
+        if form.password.data != form.confirm.data:
+            return render_template('register.html', title='Регистрация',
+                                   form=form,
+                                   message="Пароли не совпадают")
+        db_sess = db_session.create_session()
+        if db_sess.query(User).filter(User.email == form.login.data).first():
+            return render_template('register.html', title='Регистрация',
+                                   form=form,
+                                   message="Такой пользователь уже есть")
+        user = User(
+            name=form.name.data,
+            email=form.login.data,
+            surname=form.surname.data,
+            hashed_password=form.password.data
+        )
+        user.set_password(form.password.data)
+        db_sess.add(user)
+        db_sess.commit()
+        return redirect('/login')
     return render_template('register.html', title='Регистрация', form=form)
 
 
